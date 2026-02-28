@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Market News — SwingTrader Pro{% endblock %}
+{% block content %}
+<div class="flex-between page-header">
+  <div>
+    <div class="page-title">Market News</div>
+    <div class="page-subtitle">Indian stock market · refreshes every 30 minutes</div>
+  </div>
+  <button id="refresh-news-btn" class="btn btn-outline" onclick="refreshNews()">↻ Refresh</button>
+</div>
+
+{% if news %}
+<div class="news-grid">
+  {% for n in news %}
+  <a href="{{ n.url }}" target="_blank" rel="noopener" class="news-card">
+    <div class="news-source">{{ n.source }}</div>
+    <div class="news-title">{{ n.title }}</div>
+    {% if n.summary %}<div class="news-summary">{{ n.summary }}</div>{% endif %}
+    {% if n.published_at %}<div style="font-size:11px; color:var(--text-3); margin-top:4px">{{ n.published_at[:30] if n.published_at else '' }}</div>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align:center; padding:60px">
+  <div style="font-size:48px">📰</div>
+  <div class="page-title" style="font-size:20px; margin-top:16px">No News Loaded</div>
+  <p class="text-muted" style="margin-top:8px; font-size:14px">Click Refresh to fetch the latest market news</p>
+  <button onclick="refreshNews()" class="btn btn-primary" style="margin-top:20px">Fetch News</button>
+</div>
+{% endif %}
+{% endblock %}

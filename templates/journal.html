@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Trading Journal — SwingTrader Pro{% endblock %}
+{% block content %}
+<div class="flex-between page-header">
+  <div>
+    <div class="page-title">Trading Journal</div>
+    <div class="page-subtitle">Track every trade. Improve every day.</div>
+  </div>
+  <button class="btn btn-primary" onclick="openTradeModal()">+ Add Trade</button>
+</div>
+
+<!-- Analytics -->
+{% if analytics.total > 0 %}
+<div class="grid-4 mb-16">
+  <div class="stat-tile">
+    <div class="stat-label">Total Trades</div>
+    <div class="stat-value">{{ analytics.total }}</div>
+  </div>
+  <div class="stat-tile">
+    <div class="stat-label">Win Rate</div>
+    <div class="stat-value {% if analytics.win_rate >= 50 %}green{% else %}red{% endif %}">{{ analytics.win_rate }}%</div>
+  </div>
+  <div class="stat-tile">
+    <div class="stat-label">Avg R Multiple</div>
+    <div class="stat-value {% if analytics.avg_rr >= 1 %}green{% else %}red{% endif %}">{{ analytics.avg_rr }}R</div>
+  </div>
+  <div class="stat-tile">
+    <div class="stat-label">Total P&L</div>
+    <div class="stat-value {% if analytics.total_pnl >= 0 %}green{% else %}red{% endif %}">₹{{ analytics.total_pnl }}</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="card mb-16">
+  <form method="GET" action="/journal/">
+    <div class="flex-center gap-8" style="flex-wrap:wrap">
+      <input name="symbol" placeholder="Filter by symbol" value="{{ symbol }}" style="width:160px">
+      <input name="from" type="date" value="{{ date_from }}" style="width:160px">
+      <input name="to" type="date" value="{{ date_to }}" style="width:160px">
+      <button type="submit" class="btn btn-outline">Filter</button>
+      {% if symbol or date_from or date_to %}
+      <a href="/journal/" class="btn btn-ghost">Clear</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<!-- Trades table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">All Trades ({{ trades|length }})</div>
+  </div>
+  {% if trades %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Symbol</th><th>Dir</th><th>Entry</th><th>SL</th><th>Target</th><th>Exit</th><th>Qty</th><th>Result</th><th>P&L</th><th>R</th><th>Notes</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for t in trades %}
+        <tr id="trade-row-{{ t.id }}">
+          <td class="text-mono fs-12">{{ t.trade_date }}</td>
+          <td class="fw-600">{{ t.symbol }}</td>
+          <td><span class="badge {% if t.direction == 'LONG' %}badge-green{% else %}badge-red{% endif %}">{{ t.direction }}</span></td>
+          <td class="text-mono">₹{{ t.entry_price }}</td>
+          <td class="text-mono text-red">₹{{ t.stop_loss }}</td>
+          <td class="text-mono text-green">₹{{ t.target_price }}</td>
+          <td class="text-mono">{% if t.exit_price %}₹{{ t.exit_price }}{% else %}—{% endif %}</td>
+          <td class="text-mono">{{ t.quantity or '—' }}</td>
+          <td>
+            {% if t.result %}
+            <span class="badge {% if t.result == 'WIN' %}badge-green{% else %}badge-red{% endif %}">{{ t.result }}</span>
+            {% else %}<span class="badge badge-yellow">OPEN</span>{% endif %}
+          </td>
+          <td class="text-mono {% if t.pnl and t.pnl > 0 %}text-green{% elif t.pnl and t.pnl < 0 %}text-red{% endif %}">
+            {% if t.pnl %}₹{{ t.pnl }}{% else %}—{% endif %}
+          </td>
+          <td class="text-mono {% if t.r_multiple and t.r_multiple > 0 %}text-green{% elif t.r_multiple and t.r_multiple < 0 %}text-red{% endif %}">
+            {% if t.r_multiple %}{{ t.r_multiple }}R{% else %}—{% endif %}
+          </td>
+          <td class="fs-12 text-muted" style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ t.notes or '' }}</td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="deleteTrade({{ t.id }})">✕</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center; padding:40px">
+    <div style="font-size:48px">📖</div>
+    <p class="text-muted" style="margin-top:12px; font-size:14px">No trades found. Click "+ Add Trade" to get started.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Add Trade Modal -->
+<div id="trade-modal" class="modal-overlay" onclick="if(event.target===this)closeTradeModal()">
+  <div class="modal">
+    <div class="flex-between mb-16">
+      <div class="modal-title">Add Trade</div>
+      <button onclick="closeTradeModal()" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <form id="trade-form" onsubmit="submitTrade(event)" enctype="multipart/form-data">
+      <div class="grid-2" style="gap:12px">
+        <div class="form-group"><label>Date</label><input name="trade_date" type="date" required></div>
+        <div class="form-group"><label>Symbol</label><input id="trade-symbol" name="symbol" placeholder="RELIANCE" required></div>
+        <div class="form-group"><label>Direction</label>
+          <select name="direction"><option value="LONG">LONG</option><option value="SHORT">SHORT</option></select>
+        </div>
+        <div class="form-group"><label>Quantity</label><input name="quantity" type="number" placeholder="100" min="1"></div>
+        <div class="form-group"><label>Entry Price (₹)</label><input id="trade-entry" name="entry_price" type="number" step="0.05" required></div>
+        <div class="form-group"><label>Stop Loss (₹)</label><input name="stop_loss" type="number" step="0.05" required></div>
+        <div class="form-group"><label>Target (₹)</label><input name="target_price" type="number" step="0.05" required></div>
+        <div class="form-group"><label>Exit Price (₹) — optional</label><input name="exit_price" type="number" step="0.05"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><textarea name="notes" rows="2" placeholder="Setup description, lessons learned..."></textarea></div>
+      <div class="form-group"><label>Screenshot (optional)</label><input name="screenshot" type="file" accept="image/*" style="padding:8px"></div>
+      <div class="flex-between mt-16">
+        <button type="button" onclick="closeTradeModal()" class="btn btn-ghost">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Trade</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Set today's date by default
+document.addEventListener('DOMContentLoaded', () => {
+  const d = document.querySelector('[name="trade_date"]');
+  if (d) d.value = new Date().toISOString().slice(0,10);
+});
+</script>
+{% endblock %}

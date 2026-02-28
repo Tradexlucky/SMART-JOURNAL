@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pending — SwingTrader Pro</title>
+<link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-card">
+    <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+    <div class="auth-logo" style="font-size: 22px;">Access Pending</div>
+    <div class="auth-tagline">
+      {% if user %}Hi @{{ user.username }},{% endif %} your account is awaiting admin approval.
+      You'll receive a notification once approved.
+    </div>
+    <a href="/auth/logout" class="github-btn" style="margin-top: 8px;">Sign out</a>
+  </div>
+</div>
+</body>
+</html>

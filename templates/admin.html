@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel — SwingTrader Pro{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Admin Panel</div>
+  <div class="page-subtitle">User management and system overview</div>
+</div>
+
+<!-- Stats -->
+<div class="grid-4 mb-16">
+  <div class="stat-tile">
+    <div class="stat-label">Total Users</div>
+    <div class="stat-value accent">{{ users|length }}</div>
+  </div>
+  <div class="stat-tile">
+    <div class="stat-label">Approved</div>
+    <div class="stat-value green">{{ users|selectattr('status','eq','approved')|list|length }}</div>
+  </div>
+  <div class="stat-tile">
+    <div class="stat-label">Pending</div>
+    <div class="stat-value yellow">{{ users|selectattr('status','eq','pending')|list|length }}</div>
+  </div>
+  <div class="stat-tile">
+    <div class="stat-label">Blocked</div>
+    <div class="stat-value red">{{ users|selectattr('status','eq','blocked')|list|length }}</div>
+  </div>
+</div>
+
+<!-- Users table -->
+<div class="card mb-16">
+  <div class="card-header">
+    <div class="card-title">All Users</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Avatar</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{% if u.avatar_url %}<img src="{{ u.avatar_url }}" style="width:28px;height:28px;border-radius:50%">{% endif %}</td>
+          <td class="fw-600">{{ u.username }}</td>
+          <td class="fs-12 text-muted">{{ u.email or '—' }}</td>
+          <td><span class="badge {% if u.role == 'admin' %}badge-accent{% else %}badge-gray{% endif %}">{{ u.role }}</span></td>
+          <td>
+            <span class="badge {% if u.status == 'approved' %}badge-green{% elif u.status == 'blocked' %}badge-red{% else %}badge-yellow{% endif %}">{{ u.status }}</span>
+          </td>
+          <td class="fs-12 text-muted text-mono">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+          <td>
+            <div class="flex-center gap-8">
+              {% if u.status != 'approved' %}
+              <button class="btn btn-outline btn-sm" onclick="userAction({{ u.id }}, 'approve')">✓ Approve</button>
+              {% endif %}
+              {% if u.status != 'blocked' and u.role != 'admin' %}
+              <button class="btn btn-danger btn-sm" onclick="userAction({{ u.id }}, 'block')">✗ Block</button>
+              {% endif %}
+              {% if u.role != 'admin' %}
+              <button class="btn btn-ghost btn-sm" onclick="userAction({{ u.id }}, 'make_admin')">↑ Admin</button>
+              {% elif u.id != user.id %}
+              <button class="btn btn-ghost btn-sm" onclick="userAction({{ u.id }}, 'revoke_admin')">↓ Revoke</button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Login logs -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Login Activity (last 50)</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>User</th><th>IP Address</th><th>Time</th><th>User Agent</th></tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td class="fw-600">{{ log.username or '—' }}</td>
+          <td class="text-mono fs-12">{{ log.ip_address }}</td>
+          <td class="text-mono fs-12 text-muted">{{ log.login_at[:19] if log.login_at else '—' }}</td>
+          <td class="fs-12 text-muted" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ log.user_agent or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

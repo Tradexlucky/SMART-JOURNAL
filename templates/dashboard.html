@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — SwingTrader Pro{% endblock %}
+
+{% block content %}
+<div class="flex-between page-header">
+  <div>
+    <div class="page-title">Good {% if now.hour < 12 %}Morning{% elif now.hour < 17 %}Afternoon{% else %}Evening{% endif %}, {{ user.username }} 👋</div>
+    <div class="page-subtitle">Here's your trading overview for today</div>
+  </div>
+  <div id="live-clock" class="live-clock"></div>
+</div>
+
+<!-- Today's Scan Banner -->
+{% if scan_results %}
+<div class="card mb-16" style="border-color: var(--accent); background: var(--accent-dim);">
+  <div class="flex-between">
+    <div>
+      <div class="card-title text-accent">📊 Today's Scan — {{ scan_results|length }} Signals Found</div>
+      <div style="font-size:13px; color:var(--text-2); margin-top:4px;">
+        {% for r in scan_results[:5] %}
+        <span class="badge badge-accent" style="margin-right:4px">{{ r.symbol }}</span>
+        {% endfor %}
+        {% if scan_results|length > 5 %}
+        <span class="text-muted fs-12">+{{ scan_results|length - 5 }} more</span>
+        {% endif %}
+      </div>
+    </div>
+    <a href="/algo/" class="btn btn-primary">View All →</a>
+  </div>
+</div>
+{% endif %}
+
+<!-- Main grid -->
+<div class="grid-2 mb-16" style="gap:20px">
+
+  <!-- News panel -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📰 Market News</div>
+      <a href="/news/" class="btn btn-ghost btn-sm">View all</a>
+    </div>
+    {% if news %}
+    <div class="stack" style="gap:12px">
+      {% for n in news %}
+      <a href="{{ n.url }}" target="_blank" rel="noopener" style="text-decoration:none">
+        <div style="padding:10px; border-radius:8px; border: 1px solid var(--border); transition: border-color 0.15s" onmouseover="this.style.borderColor='var(--border-light)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div class="news-source">{{ n.source }}</div>
+          <div class="news-title" style="font-size:13px; margin-top:2px">{{ n.title[:100] }}{% if n.title|length > 100 %}...{% endif %}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted fs-13">No news loaded yet. <a href="/news/refresh" style="color:var(--accent)">Fetch now</a></p>
+    {% endif %}
+  </div>
+
+  <!-- Quick Risk Calculator -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">⚡ Quick Risk Calculator</div>
+      <a href="/risk/" class="btn btn-ghost btn-sm">Full calc</a>
+    </div>
+    <div class="grid-2" style="gap:12px">
+      <div class="form-group"><label>Capital (₹)</label><input id="rc-capital" type="number" placeholder="100000" min="1000"></div>
+      <div class="form-group"><label>Risk %</label><input id="rc-risk" type="number" placeholder="1" min="0.1" max="10" step="0.1"></div>
+      <div class="form-group"><label>Entry Price</label><input id="rc-entry" type="number" placeholder="500" min="0.01"></div>
+      <div class="form-group"><label>Stop Loss</label><input id="rc-sl" type="number" placeholder="480" min="0.01"></div>
+    </div>
+    <div class="form-group"><label>Target (optional)</label><input id="rc-target" type="number" placeholder="540" min="0.01"></div>
+
+    <div id="rc-results" class="hidden">
+      <hr>
+      <div class="calc-result-grid">
+        <div class="calc-result-item"><div class="calc-result-val" id="rc-qty">—</div><div class="calc-result-label">Qty / Shares</div></div>
+        <div class="calc-result-item"><div class="calc-result-val" id="rc-maxloss">—</div><div class="calc-result-label">Max Loss</div></div>
+        <div class="calc-result-item"><div class="calc-result-val" id="rc-rr">—</div><div class="calc-result-label">R:R Ratio</div></div>
+        <div class="calc-result-item"><div class="calc-result-val" id="rc-profit">—</div><div class="calc-result-label">Potential Profit</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Journal Entries -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">📖 Recent Journal Entries</div>
+    <a href="/journal/" class="btn btn-primary btn-sm">+ Add Trade</a>
+  </div>
+  {% if recent_trades %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Symbol</th><th>Dir</th><th>Entry</th><th>SL</th><th>Target</th><th>Result</th><th>P&L</th><th>R</th></tr>
+      </thead>
+      <tbody>
+        {% for t in recent_trades %}
+        <tr>
+          <td class="text-mono fs-12">{{ t.trade_date }}</td>
+          <td class="fw-600">{{ t.symbol }}</td>
+          <td><span class="badge {% if t.direction == 'LONG' %}badge-green{% else %}badge-red{% endif %}">{{ t.direction }}</span></td>
+          <td class="text-mono">₹{{ t.entry_price }}</td>
+          <td class="text-mono text-red">₹{{ t.stop_loss }}</td>
+          <td class="text-mono text-green">₹{{ t.target_price }}</td>
+          <td>
+            {% if t.result %}
+            <span class="badge {% if t.result == 'WIN' %}badge-green{% else %}badge-red{% endif %}">{{ t.result }}</span>
+            {% else %}
+            <span class="badge badge-yellow">OPEN</span>
+            {% endif %}
+          </td>
+          <td class="text-mono {% if t.pnl and t.pnl > 0 %}text-green{% elif t.pnl and t.pnl < 0 %}text-red{% endif %}">
+            {% if t.pnl %}₹{{ t.pnl }}{% else %}—{% endif %}
+          </td>
+          <td class="text-mono {% if t.r_multiple and t.r_multiple > 0 %}text-green{% elif t.r_multiple and t.r_multiple < 0 %}text-red{% endif %}">
+            {% if t.r_multiple %}{{ t.r_multiple }}R{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted fs-13">No trades yet. <a href="/journal/" style="color:var(--accent)">Add your first trade →</a></p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // inject current hour for greeting
+  const h = new Date().getHours();
+  const greet = h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening';
+  document.querySelector('.page-title').textContent = `Good ${greet}, {{ user.username }} 👋`;
+});
+</script>
+{% endblock %}

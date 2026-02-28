@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: swingtrader-pro
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: SECRET_KEY
+        value: swingtrader-secret-2024
+```

@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+{% block title %}Algo Scanner — SwingTrader Pro{% endblock %}
+
+{% block content %}
+<div class="flex-between page-header">
+  <div>
+    <div class="page-title">Algo Scanner</div>
+    <div class="page-subtitle">Today's swing trading opportunities</div>
+  </div>
+  <div class="flex-center gap-8">
+    <div id="live-clock" class="live-clock"></div>
+    {% if user.role == 'admin' %}
+    <button class="btn btn-outline" onclick="openAddModal()">+ Add Stock</button>
+    {% endif %}
+  </div>
+</div>
+
+{% if results %}
+<div class="grid-4 mb-16">
+  <div class="stat-tile"><div class="stat-label">Total Signals</div><div class="stat-value accent">{{ results|length }}</div></div>
+  <div class="stat-tile"><div class="stat-label">Buy Signals</div><div class="stat-value green">{{ results|selectattr('signal','eq','BUY')|list|length }}</div></div>
+  <div class="stat-tile"><div class="stat-label">Sell Signals</div><div class="stat-value red">{{ results|selectattr('signal','eq','SELL')|list|length }}</div></div>
+  <div class="stat-tile"><div class="stat-label">Scan Date</div><div class="stat-value" style="font-size:18px">{{ results[0].scan_date }}</div></div>
+</div>
+{% endif %}
+
+<!-- Stock Cards -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">📊 Today's Algo Picks</div>
+    {% if results %}<span class="badge badge-accent">{{ results|length }} stocks</span>{% endif %}
+  </div>
+
+  {% if results %}
+  <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:12px; margin-bottom:8px">
+    {% for r in results %}
+    <div style="background:var(--bg-2); border:1px solid var(--border); border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s; position:relative"
+         onmouseover="this.style.borderColor='var(--accent)'; this.style.transform='translateY(-2px)'"
+         onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)'"
+         onclick="showChart('{{ r.symbol }}', {{ r.price or 0 }}, '{{ r.signal }}', '{{ r.conditions_met }}', {{ r.entry or 0 }}, {{ r.sl or 0 }}, {{ r.tp or 0 }})">
+
+      <!-- Admin delete button -->
+      {% if user.role == 'admin' %}
+      <button onclick="event.stopPropagation(); deleteStock({{ r.id }})"
+              style="position:absolute; top:8px; right:8px; background:var(--red-dim); border:none; color:var(--red); border-radius:6px; width:22px; height:22px; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center">✕</button>
+      {% endif %}
+
+      <!-- Symbol -->
+      <div style="font-family:var(--font-mono); font-size:17px; font-weight:700; color:var(--text-1)">{{ r.symbol }}</div>
+
+      <!-- Signal badge -->
+      <div style="margin-top:6px">
+        <span class="badge {% if r.signal == 'BUY' %}badge-green{% elif r.signal == 'SELL' %}badge-red{% else %}badge-yellow{% endif %}">
+          {{ r.signal }}
+        </span>
+      </div>
+
+      <!-- Price -->
+      {% if r.price and r.price > 0 %}
+      <div style="font-family:var(--font-mono); font-size:14px; color:var(--text-2); margin-top:8px">
+        CMP: <span style="color:var(--text-1); font-weight:600">₹{{ r.price }}</span>
+      </div>
+      {% endif %}
+
+      <!-- Entry / SL / TP -->
+      {% if r.entry and r.entry > 0 %}
+      <div style="margin-top:8px; display:flex; flex-direction:column; gap:3px">
+        <div style="font-size:12px; display:flex; justify-content:space-between">
+          <span style="color:var(--text-3)">Entry</span>
+          <span style="font-family:var(--font-mono); color:var(--accent)">₹{{ r.entry }}</span>
+        </div>
+        <div style="font-size:12px; display:flex; justify-content:space-between">
+          <span style="color:var(--text-3)">SL</span>
+          <span style="font-family:var(--font-mono); color:var(--red)">₹{{ r.sl }}</span>
+        </div>
+        <div style="font-size:12px; display:flex; justify-content:space-between">
+          <span style="color:var(--text-3)">Target</span>
+          <span style="font-family:var(--font-mono); color:var(--green)">₹{{ r.tp }}</span>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Conditions -->
+      {% if r.conditions_met %}
+      <div style="font-size:10px; color:var(--text-3); margin-top:8px; line-height:1.4">{{ r.conditions_met }}</div>
+      {% endif %}
+
+      <div style="font-size:10px; color:var(--text-3); margin-top:6px">👆 Click → Chart</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div style="text-align:center; padding:60px">
+    <div style="font-size:48px">📭</div>
+    <div style="font-family:var(--font-head); font-size:18px; margin-top:16px; color:var(--text-1)">Aajache Scan Pending Ahe</div>
+    <p style="color:var(--text-3); font-size:13px; margin-top:8px">
+      Daily 4:30 PM IST la auto-scan hoto.<br>
+      {% if user.role == 'admin' %}Admin: "+ Add Stock" button vaparoon manually stocks add kara.{% endif %}
+    </p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Chart Modal -->
+<div id="chart-modal" class="modal-overlay" onclick="if(event.target===this)closeChart()">
+  <div style="background:var(--bg-1); border:1px solid var(--border-light); border-radius:16px; width:95%; max-width:1000px; overflow:hidden">
+    <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between">
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+        <div id="modal-symbol" style="font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--accent)">—</div>
+        <span id="modal-signal" class="badge badge-green">BUY</span>
+        <span id="modal-price" style="font-family:var(--font-mono); color:var(--text-2); font-size:14px"></span>
+        <div id="modal-levels" style="display:flex; gap:12px; font-size:12px; font-family:var(--font-mono)">
+          <span>Entry: <span id="m-entry" style="color:var(--accent)">—</span></span>
+          <span>SL: <span id="m-sl" style="color:var(--red)">—</span></span>
+          <span>TP: <span id="m-tp" style="color:var(--green)">—</span></span>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="addToJournal()">+ Journal</button>
+        <button onclick="closeChart()" class="btn btn-ghost btn-sm">✕</button>
+      </div>
+    </div>
+
+    <!-- Timeframe -->
+    <div style="padding:8px 20px; border-bottom:1px solid var(--border); display:flex; gap:6px; align-items:center">
+      <span style="font-size:11px; color:var(--text-3); margin-right:4px">Timeframe:</span>
+      {% for tf, label in [('5','5m'),('15','15m'),('60','1H'),('D','Daily'),('W','Weekly'),('M','Monthly')] %}
+      <button onclick="changeInterval('{{ tf }}')" id="tf-{{ tf }}"
+              class="btn btn-ghost btn-sm"
+              style="{% if tf == 'D' %}background:var(--accent-dim);color:var(--accent){% endif %}; padding:4px 10px; font-size:12px">
+        {{ label }}
+      </button>
+      {% endfor %}
+    </div>
+
+    <iframe id="chart-frame" src="" style="width:100%; height:480px; border:none; display:block"></iframe>
+
+    <div style="padding:10px 20px; border-top:1px solid var(--border)">
+      <span style="font-size:11px; color:var(--text-3)">Notes: </span>
+      <span id="modal-conditions" style="font-size:11px; color:var(--text-2)">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Add Stock Modal -->
+{% if user.role == 'admin' %}
+<div id="add-modal" class="modal-overlay" onclick="if(event.target===this)closeAddModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="flex-between mb-16">
+      <div class="modal-title">➕ Stock Add Kara</div>
+      <button onclick="closeAddModal()" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+
+    <div class="grid-2" style="gap:12px">
+      <div class="form-group">
+        <label>Symbol *</label>
+        <input id="add-symbol" placeholder="e.g. RELIANCE" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label>Signal *</label>
+        <select id="add-signal">
+          <option value="BUY">BUY</option>
+          <option value="SELL">SELL</option>
+          <option value="WATCH">WATCH</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>CMP / Price (₹)</label>
+        <input id="add-price" type="number" placeholder="e.g. 2456" step="0.05">
+      </div>
+      <div class="form-group">
+        <label>Entry Price (₹)</label>
+        <input id="add-entry" type="number" placeholder="e.g. 2460" step="0.05">
+      </div>
+      <div class="form-group">
+        <label>Stop Loss (₹)</label>
+        <input id="add-sl" type="number" placeholder="e.g. 2380" step="0.05">
+      </div>
+      <div class="form-group">
+        <label>Target / TP (₹)</label>
+        <input id="add-tp" type="number" placeholder="e.g. 2620" step="0.05">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Notes / Setup</label>
+      <input id="add-notes" placeholder="e.g. VCP Breakout, EMA Cross, Cup & Handle...">
+    </div>
+
+    <!-- Live RR Preview -->
+    <div id="rr-preview" style="display:none; background:var(--bg-2); border-radius:var(--radius); padding:12px; margin-bottom:16px">
+      <div style="display:flex; justify-content:space-around; text-align:center">
+        <div>
+          <div style="font-family:var(--font-mono); font-size:18px; color:var(--accent)" id="prev-rr">—</div>
+          <div style="font-size:11px; color:var(--text-3)">R:R Ratio</div>
+        </div>
+        <div>
+          <div style="font-family:var(--font-mono); font-size:18px; color:var(--red)" id="prev-risk">—</div>
+          <div style="font-size:11px; color:var(--text-3)">Risk Points</div>
+        </div>
+        <div>
+          <div style="font-family:var(--font-mono); font-size:18px; color:var(--green)" id="prev-reward">—</div>
+          <div style="font-size:11px; color:var(--text-3)">Reward Points</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex-between">
+      <button onclick="closeAddModal()" class="btn btn-ghost">Cancel</button>
+      <button onclick="submitAddStock()" class="btn btn-primary">Add Stock →</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentSymbol = '';
+let currentPrice  = 0;
+let currentEntry  = 0;
+let currentSL     = 0;
+let currentTP     = 0;
+
+// ── Chart ──────────────────────────────────────────────────
+function buildChartUrl(symbol, interval) {
+  // Interval convert kar
+  const tfMap = {
+    '1':'1','5':'5','15':'15','60':'60','D':'D','W':'W','M':'M'
+  };
+  const tf = tfMap[interval] || 'D';
+  
+  // Groww chart — no login, no block!
+  return `https://groww.in/stocks/nse-${symbol.toLowerCase()}`;
+}
+
+function showChart(symbol, price, signal, conditions, entry, sl, tp) {
+  currentSymbol = symbol;
+  currentPrice  = price;
+  currentEntry  = entry;
+  currentSL     = sl;
+  currentTP     = tp;
+
+  document.getElementById('modal-symbol').textContent     = symbol;
+  document.getElementById('modal-price').textContent      = price > 0 ? `CMP ₹${price}` : '';
+  document.getElementById('modal-conditions').textContent = conditions || '—';
+
+  const sigEl = document.getElementById('modal-signal');
+  sigEl.textContent = signal;
+  sigEl.className   = 'badge ' + (signal==='BUY' ? 'badge-green' : signal==='SELL' ? 'badge-red' : 'badge-yellow');
+
+  document.getElementById('m-entry').textContent = entry > 0 ? `₹${entry}` : '—';
+  document.getElementById('m-sl').textContent    = sl > 0    ? `₹${sl}`    : '—';
+  document.getElementById('m-tp').textContent    = tp > 0    ? `₹${tp}`    : '—';
+
+  document.getElementById('chart-frame').src = buildChartUrl(symbol, 'D');
+
+  // Reset timeframe buttons
+  document.querySelectorAll('[id^="tf-"]').forEach(b => { b.style.background=''; b.style.color=''; });
+  const dBtn = document.getElementById('tf-D');
+  if (dBtn) { dBtn.style.background='var(--accent-dim)'; dBtn.style.color='var(--accent)'; }
+
+  document.getElementById('chart-modal').classList.add('show');
+}
+
+function changeInterval(interval) {
+  document.getElementById('chart-frame').src = buildChartUrl(currentSymbol, interval);
+  document.querySelectorAll('[id^="tf-"]').forEach(b => { b.style.background=''; b.style.color=''; });
+  const btn = document.getElementById(`tf-${interval}`);
+  if (btn) { btn.style.background='var(--accent-dim)'; btn.style.color='var(--accent)'; }
+}
+
+function closeChart() {
+  document.getElementById('chart-modal').classList.remove('show');
+  document.getElementById('chart-frame').src = '';
+}
+
+function addToJournal() {
+  closeChart();
+  const sym = document.getElementById('trade-symbol');
+  const ent = document.getElementById('trade-entry');
+  const sl  = document.querySelector('[name="stop_loss"]');
+  const tp  = document.querySelector('[name="target_price"]');
+  if (sym) sym.value = currentSymbol;
+  if (ent) ent.value = currentEntry || currentPrice;
+  if (sl && currentSL)  sl.value  = currentSL;
+  if (tp && currentTP)  tp.value  = currentTP;
+  if (document.getElementById('trade-modal')) openTradeModal();
+  else window.location.href = `/journal/?symbol=${currentSymbol}`;
+}
+
+// ── Admin Add Stock ─────────────────────────────────────────
+function openAddModal() {
+  document.getElementById('add-modal')?.classList.add('show');
+}
+function closeAddModal() {
+  document.getElementById('add-modal')?.classList.remove('show');
+}
+
+// Live R:R preview
+['add-entry','add-sl','add-tp'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', updateRRPreview);
+});
+
+function updateRRPreview() {
+  const entry  = parseFloat(document.getElementById('add-entry')?.value) || 0;
+  const sl     = parseFloat(document.getElementById('add-sl')?.value)    || 0;
+  const tp     = parseFloat(document.getElementById('add-tp')?.value)    || 0;
+
+  if (!entry || !sl || !tp) {
+    document.getElementById('rr-preview').style.display = 'none';
+    return;
+  }
+
+  const risk   = Math.abs(entry - sl);
+  const reward = Math.abs(tp - entry);
+  const rr     = risk > 0 ? (reward / risk).toFixed(2) : 0;
+
+  document.getElementById('prev-rr').textContent     = `1 : ${rr}`;
+  document.getElementById('prev-risk').textContent   = `${risk.toFixed(2)}`;
+  document.getElementById('prev-reward').textContent = `${reward.toFixed(2)}`;
+  document.getElementById('rr-preview').style.display = 'block';
+
+  document.getElementById('prev-rr').style.color = rr >= 2 ? 'var(--green)' : rr >= 1 ? 'var(--yellow)' : 'var(--red)';
+}
+
+async function submitAddStock() {
+  const symbol = document.getElementById('add-symbol').value.toUpperCase().trim();
+  const signal = document.getElementById('add-signal').value;
+  const price  = parseFloat(document.getElementById('add-price').value)  || 0;
+  const entry  = parseFloat(document.getElementById('add-entry').value)  || 0;
+  const sl     = parseFloat(document.getElementById('add-sl').value)     || 0;
+  const tp     = parseFloat(document.getElementById('add-tp').value)     || 0;
+  const notes  = document.getElementById('add-notes').value.trim();
+
+  if (!symbol) { showToast('Symbol required!', 'error'); return; }
+  if (!entry || !sl || !tp) { showToast('Entry, SL, TP required!', 'error'); return; }
+
+  try {
+    const res = await api('/algo/add', 'POST', { symbol, signal, price, entry, sl, tp, notes });
+    if (res.success) {
+      showToast(`${symbol} added successfully!`, 'success');
+      closeAddModal();
+      setTimeout(() => location.reload(), 800);
+    }
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+async function deleteStock(id) {
+  if (!confirm('He stock remove karayshe?')) return;
+  try {
+    await api(`/algo/delete/${id}`, 'DELETE');
+    showToast('Stock removed!', 'success');
+    setTimeout(() => location.reload(), 600);
+  } catch {
+    showToast('Delete failed', 'error');
+  }
+}
+</script>
+{% endblock %}
